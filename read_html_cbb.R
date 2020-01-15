@@ -89,26 +89,6 @@ get_cbb_teams <- function(url_teams){
 cbb_teams <- get_cbb_teams(url_teams)
 
 
-url_teams <- "https://www.sports-reference.com/cbb/seasons/2019-school-stats.html"
-cbb_teams <- url_teams %>% read_html() %>% 
-  #html_nodes(xpath = "/html/body/div[2]/div[5]/div[2]/div[2]/div/table") %>% 
-  html_nodes("table") %>%
-  .[[1]] %>%
-  html_table()
-
-cbb_teams %<>% data.frame() %>% 
-  #filter out spacer rows
-  filter(Var.2 != "School" & Var.2 != "") %>% 
-  #remove blank spacer column
-  select(-Var.17)
-#make fresh headers
-names(cbb_teams) <- c(
-  "rank","school","ovrall_g","ovrall_wins","ovrall_loss","ovrall_w_l_perc","SRS","SOS",
-  "conf_w","conf_l","home_w","home_l","away_w","away_l","pts_tm","pts_opp",
-  "mp","fg","fga","fg_perc","three_p","three_pa","three_p_perc","ft","fta",
-  "fta_perc","orb","trb","ast","stl","blk","tov","pf"
-)
-
 #--------------#
 # housekeeping #
 #--------------#
