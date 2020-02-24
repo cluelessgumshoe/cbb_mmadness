@@ -15,38 +15,6 @@ p_load(tidyverse, rvest, stringr, magrittr, lubridate)
 # Scrape data from web #
 #----------------------#
 
-# get cbb overview data for the current and previous 5 years
-# 
-# get_url_ovrvw <- function(n_years){
-#   i = 1
-#   url_ovrvw = list()
-#   url_ovrvw[i] = paste0("https://www.sports-reference.com/cbb/seasons/",year(Sys.Date()),".html")
-#   for (i in 1:n_years){
-#     url_ovrvw[i+1] = paste0("https://www.sports-reference.com/cbb/seasons/",year(Sys.Date())-i,".html")
-#   }
-#   return(url_ovrvw)
-# }
-# url_ovrvw <- get_url_ovrvw(5)
-# 
-# get_cbb_ovrvw <- function(url_ovrvw){
-#   cbb_ovrvw <- data_frame()
-#   i = 1
-#   for (i in 1:length(url_ovrvw)){
-#     cbb <- url_ovrvw[[i]] %>% read_html() %>% 
-#     #html_nodes(xpath = "/html/body/div[2]/div[5]/div[2]/div[2]/div/table") %>% 
-#     html_nodes("table") %>%
-#     .[[1]] %>%
-#     html_table()
-#     cbb[14] = (year(Sys.Date()) - (i-1))    
-#     cbb_ovrvw <- rbind(cbb_ovrvw,cbb)
-#   }
-#   cbb_ovrvw %<>% dplyr::rename("year" = V14)
-#   return(cbb_ovrvw)
-# }
-# cbb_ovrvw <- get_cbb_ovrvw(url_ovrvw)
-
-# get cbb teams data for the current and previous 5 years
-
 get_url_teams <- function(n_years){
   i = 1
   url_teams = list()
@@ -92,21 +60,6 @@ cbb_teams <- get_cbb_teams(url_teams)
 #----------------#
 # combine & prep #
 #----------------#
-
-#wanted to join this and use conf. amd reg_season champs data, but the school names don't match, 
-##this is much work if desired
-# cbb_ovrvw_sub <- cbb_ovrvw %>%
-#   select(`Regular Season Champ`,`Tournament Champ`,year) %>%
-#   rename(o_reg_season_cmp = `Regular Season Champ`,
-#          o_tourn_cmp = `Tournament Champ`) %>%
-#   group_by(year) %>%
-#   mutate(o_reg_season_cmp = paste0(o_reg_season_cmp,collapse = ","),
-#          o_tourn_cmp = paste0(o_tourn_cmp,collapse = ","),
-#          o_reg_season_cmp = str_remove_all(o_reg_season_cmp,"NA,"),
-#          o_tourn_cmp =  str_remove_all(o_tourn_cmp,"NA,")
-#          ) %>%
-#   distinct()
-
 #use the NCAA text from the site to make a tourney field
 # cbb_df <- cbb_teams %>%
 #   arrange(school) %>%
