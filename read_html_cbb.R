@@ -5,7 +5,7 @@
 #Time frame is last ten years (not including current year (2020))
 #Included only teams haveing been to tourey within time frame
 
-#-------#
+#-------#   
 # Setup #
 #-------#
 
@@ -14,7 +14,7 @@ if (!require("pacman")) install.packages("pacman")
 library(pacman)
 
 # Load packages
-p_load(tidyverse, rvest, stringr, magrittr, lubridate,purrr)
+p_load(tidyverse, rvest, stringr, magrittr, lubridate,purrr,feather)
 
 #----------------------#
 # Useful Functions     #
@@ -305,6 +305,16 @@ p_load(ggplot2, corrplot,DataExplorer)
 cbb_team_c %>% DataExplorer::plot_missing()
 cbb_team_c %>% select(-teamid,-year,-school) %>% as.matrix() %>% cor() %>% corrplot::corrplot()
 
+
+#---------------------#
+# housekeeping is fun #
+#---------------------#
+
+rm(list = c("dlm_team","dlm_Teams","dlm_TourneyRounds",
+            "dlm_TourneySeeds","dlm_TourneySlots","url_teams",
+            "cbb_teams","cbb_team","get_cbb_teams","get_url_teams",
+            "cbb","cbb_df"))
+
 #-------------------#
 # prep for modeling #
 #-------------------#
@@ -313,29 +323,30 @@ p_load(caret,RANN)
 cbb_team_pdf <- cbb_team_c %>% 
   #replace missing data with average for the given team
   group_by(school) %>%
-  mutate(orb = case_when(is.na(orb) ~ mean(orb), TRUE ~ orb),
-         orb = case_when(is.na(orb) ~ mean(orb), TRUE ~ orb),
-         conf_l = case_when(is.na(conf_l) ~ mean(conf_l), TRUE ~ conf_l),
-         conf_w = case_when(is.na(conf_w) ~ mean(conf_w), TRUE ~ conf_w),
-         sos = case_when(is.na(sos) ~ mean(sos), TRUE ~ sos),
-         srs = case_when(is.na(srs) ~ mean(srs), TRUE ~ srs),
-         mp = case_when(is.na(mp) ~ mean(mp), TRUE ~ mp)) %>%
-  ungroup() %>% view()
-  select(-school,row_num, teamid) 
+  mutate(orb = case_when(is.na(orb) ~ mean(orb, na.rm = TRUE), TRUE ~ orb),
+         orb = case_when(is.na(orb) ~ mean(orb, na.rm = TRUE), TRUE ~ orb),
+         conf_l = case_when(is.na(conf_l) ~ mean(conf_l, na.rm = TRUE), TRUE ~ conf_l),
+         conf_w = case_when(is.na(conf_w) ~ mean(conf_w, na.rm = TRUE), TRUE ~ conf_w),
+         sos = case_when(is.na(sos) ~ mean(sos, na.rm = TRUE), TRUE ~ sos),
+         srs = case_when(is.na(srs) ~ mean(srs, na.rm = TRUE), TRUE ~ srs),
+         mp = case_when(is.na(mp) ~ mean(mp, na.rm = TRUE), TRUE ~ mp)) %>%
+  ungroup() %>% 
+  select(-school,-row_num, -teamid,-year,-tour) 
+#check that all missing are gone and see the correlations
+cbb_team_pdf %>% DataExplorer::plot_missing()
+#there are few few variables here that could be removed, but will leave in for now
+cbb_team_pdf %>% as.matrix() %>% cor() %>% corrplot::corrplot()
 
 #create training and test samples
 cbb_p_train <- createDataPartition(cbb_team_pdf$result ,p=0.7,list = F)
 cbb_train <- cbb_team_pdf[cbb_p_train,]
-preProcess_missingdata_model <- preProcess(cbb_train, method='knnImpute')
-cbb_train <- predict(preProcess_missingdata_model, newdata = cbb_train) 
-
 cbb_test <- cbb_team_pdf[-cbb_p_train,]
 
 #-----------#
 #  modeling #
 #-----------#
 
-ctrl <- trainControl(method = "repeatedcv", number = 10, repeats = 3,savePredictions = TRUE)
+ctrl <- trainControl(method = "repeatedcv", number = 10, repeats = 3,savePredictions = TRUE, classProbs = TRUE)
 
 #KNN Model
 cbb_knn <- caret::train(
@@ -348,7 +359,7 @@ cbb_knn <- caret::train(
 saveRDS(cbb_knn,"cbb_knn.rds")
 
 cbb_knn
-pred_knn = predict(cbb_knn,cbb_test)
+pred_knn = predict(cbb_knn,newdata = cbb_test)
 pred_knn_accuracy = round(mean(pred_knn == cbb_test$result)*100,2)
 mean(mean(pred_knn != cbb_train$result))
 
@@ -376,6 +387,15 @@ pred_nn_accuracy = round(mean(pred_nn == cbb_test$result)*100,4)
 
 p_load(NeuralNetTools)
 plotnet(cbb_nn, alpha = 0.5)
+
+
+cbb_svm <- caret::train(
+  result ~ .,
+  data = cbb_train,
+  method = "svm",
+  preProcess = c("center","scale"),
+  trControl = ctrl
+)
 
 #--------------#
 # housekeeping #
