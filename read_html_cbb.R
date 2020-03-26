@@ -103,8 +103,8 @@ get_cbb_teams <- function(url_teams){
   return(cbb_teams)
 }
 cbb_teams <- get_cbb_teams(url_teams)
-feather::write_feather(cbb_teams,"cbb_teams.feather")
-
+#feather::write_feather(cbb_teams,"data/cbb_teams.feather")
+cbb_teams <- read_feather("data/cbb_teams.feather")
 #----------------#
 # combine & prep #
 #----------------#
@@ -258,6 +258,7 @@ cbb %<>% select(TEAM, CONF, POSTSEASON, SEED, YEAR) %>%
 cbb_team_c <- cbb_team %>% 
   left_join(dlm_Teams,by = c("school" = "Team_Full")) %>%
   left_join(dlm_TourneySeeds, by = c("TeamID"="TeamID","year" = "Season")) %>%
+  #left_join(dlm_TourneyRounds, by = c("Seed"="Seed","year" = "Season")) %>%  
   left_join(cbb, by = c("school" = "TEAM","year" = "YEAR"))  %>%
   #select(-row_num.y,-row_num.x) %>%
   rename(seed_num = SEED,
@@ -297,15 +298,6 @@ cbb_team_c %<>% .[shuffle_columns(names(cbb_team_c), "year before school")]
 cbb_team_c %<>%   mutate_at(.funs = list(as.numeric),.vars = vars(rank:tour)) 
 
 feather::write_feather(cbb_team_c,"data/cbb_team_c.feather")
-#-------------------#
-# exploratory       #
-#-------------------#
-#goal: predict the highest round 
-p_load(ggplot2, corrplot,DataExplorer)
-cbb_team_c %>% DataExplorer::plot_missing()
-cbb_team_c %>% select(-teamid,-year,-school) %>% as.matrix() %>% cor() %>% corrplot::corrplot()
-
-
 #---------------------#
 # housekeeping is fun #
 #---------------------#
@@ -314,93 +306,3 @@ rm(list = c("dlm_team","dlm_Teams","dlm_TourneyRounds",
             "dlm_TourneySeeds","dlm_TourneySlots","url_teams",
             "cbb_teams","cbb_team","get_cbb_teams","get_url_teams",
             "cbb","cbb_df"))
-
-#-------------------#
-# prep for modeling #
-#-------------------#
-#goal: predict the highest round 
-p_load(caret,RANN)
-cbb_team_pdf <- cbb_team_c %>% 
-  #replace missing data with average for the given team
-  group_by(school) %>%
-  mutate(orb = case_when(is.na(orb) ~ mean(orb, na.rm = TRUE), TRUE ~ orb),
-         orb = case_when(is.na(orb) ~ mean(orb, na.rm = TRUE), TRUE ~ orb),
-         conf_l = case_when(is.na(conf_l) ~ mean(conf_l, na.rm = TRUE), TRUE ~ conf_l),
-         conf_w = case_when(is.na(conf_w) ~ mean(conf_w, na.rm = TRUE), TRUE ~ conf_w),
-         sos = case_when(is.na(sos) ~ mean(sos, na.rm = TRUE), TRUE ~ sos),
-         srs = case_when(is.na(srs) ~ mean(srs, na.rm = TRUE), TRUE ~ srs),
-         mp = case_when(is.na(mp) ~ mean(mp, na.rm = TRUE), TRUE ~ mp)) %>%
-  ungroup() %>% 
-  select(-school,-row_num, -teamid,-year,-tour) 
-#check that all missing are gone and see the correlations
-cbb_team_pdf %>% DataExplorer::plot_missing()
-#there are few few variables here that could be removed, but will leave in for now
-cbb_team_pdf %>% as.matrix() %>% cor() %>% corrplot::corrplot()
-
-#create training and test samples
-cbb_p_train <- createDataPartition(cbb_team_pdf$result ,p=0.7,list = F)
-cbb_train <- cbb_team_pdf[cbb_p_train,]
-cbb_test <- cbb_team_pdf[-cbb_p_train,]
-
-#-----------#
-#  modeling #
-#-----------#
-
-ctrl <- trainControl(method = "repeatedcv", number = 10, repeats = 3,savePredictions = TRUE, classProbs = TRUE)
-
-#KNN Model
-cbb_knn <- caret::train(
-  result ~ .,
-  data = cbb_train,
-  method = "knn",
-  preProcess = c("center","scale"),
-  trControl = ctrl
-)
-saveRDS(cbb_knn,"cbb_knn.rds")
-
-cbb_knn
-pred_knn = predict(cbb_knn,newdata = cbb_test)
-pred_knn_accuracy = round(mean(pred_knn == cbb_test$result)*100,2)
-mean(mean(pred_knn != cbb_train$result))
-
-ggplot(data=cbb_knn$results, aes(x=k, y=RMSE)) +
-  geom_line() +
-  geom_point()
-
-
-#NN model
-cbb_nn <- caret::train(
-  result ~ .,
-  data = cbb_train,
-  method = "nnet",
-  preProcess = c("center","scale"),
-  trControl = ctrl,
-  trace=F
-)
-saveRDS(cbb_nn,"cbb_nn.rds")
-
-cbb_nn
-summary(cbb_nn)
-cbb_nn$results
-pred_nn = predict(cbb_nn,newdata=cbb_test)
-pred_nn_accuracy = round(mean(pred_nn == cbb_test$result)*100,4)
-
-p_load(NeuralNetTools)
-plotnet(cbb_nn, alpha = 0.5)
-
-
-cbb_svm <- caret::train(
-  result ~ .,
-  data = cbb_train,
-  method = "svm",
-  preProcess = c("center","scale"),
-  trControl = ctrl
-)
-
-#--------------#
-# housekeeping #
-#--------------#
-
-rm(list = c("url_ovrvw","url_teams","cbb","get_cbb_ovrvw","get_cbb_teams","get_url_ovrvw","get_url_teams","dlm_team_names","cbb_names",
-            "dlm_TourneyRounds","dlm_TourneySeeds","dlm_TourneySlots","cbb_df","cbb_team","dlm_team","dlm_Teams"))
- 
